@@ -188,7 +188,7 @@ select_disk() {
     printf '\n─────────────────────────────────────────────────────\n\n'
 
     warning_msg "Please choose the installation disk"
-    PS3="\n→ Selection (number) : "
+    PS3="→ Selection (number) : "
     select DRIVE in $(lsblk -dnp -e 7,11 -o NAME); do
         if [[ -n "$DRIVE" && -b "$DRIVE" ]]; then
             success_msg "Selected installation disk: $DRIVE"
@@ -251,7 +251,7 @@ partition_and_mount() {
             select EFI_PART in $efi_list; do
                 if [[ -n "$EFI_PART" ]]; then
                     success_msg "Selected EFI partition: ${EFI_PART}"
-                    sleep 2
+                    sleep 1
                     break 2
                 fi
             done
@@ -288,7 +288,7 @@ partition_and_mount() {
             select ROOT_PART in $root_list; do
                 if [[ -n "$ROOT_PART" ]]; then
                     success_msg "Selected Root partition: ${ROOT_PART}"
-                    sleep 2
+                    sleep 1
                     break 2
                 fi
             done
@@ -313,7 +313,8 @@ partition_and_mount() {
     success_msg "${ROOT_PART} mounted at /mnt"
     success_msg "${EFI_PART} mounted at /mnt/efi"
     success_msg "All partitions formatted and mounted successfully"
-    sleep 2
+    warning_msg 'Press ENTER to continue...'
+    read -r
     
     clear
 }
