@@ -54,13 +54,13 @@ processing_msg() {
     printf '%s%s %s %s\n' "${BOLD}" "${WHT}" "${1:?}" "${RST}"
 }
 success_msg() {
-    printf '%s%s %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
+    printf '%s%s ▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
 }
 warning_msg() {
     printf '%s%s %s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
 }
 error_msg() {
-    printf '%s%s %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
+    printf '%s%s ERROR: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -97,6 +97,7 @@ run_preflight_checks() {
     done
     
     success_msg "Internet connection verified successfully."
+    sleep 2
 
     # ── Check Boot mode ────────────────────────────────────────
     info_msg "Check Boot mode"
@@ -120,7 +121,7 @@ get_user_info() {
     info_msg "User Accounts & System Configuration"
     # ── Username ─────────────────────────────────────────────
     while true; do
-        read -rp "  Username : " USR
+        read -rp " - Username : " USR
         if [[ "${USR}" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
             break
         fi
@@ -130,8 +131,8 @@ get_user_info() {
 
     # ── User password ────────────────────────────────────────
     while true; do
-        read -rsp "  Password for [${USR}] : " USER_PASSWD; echo
-        read -rsp "  Confirm password    : " CONF_USER_PASSWD; echo
+        read -rsp " - Password for [${USR}] : " USER_PASSWD; echo
+        read -rsp " - Confirm password    : " CONF_USER_PASSWD; echo
         if [[ "$USER_PASSWD" == "$CONF_USER_PASSWD" ]]; then
             success_msg "Password configured successfully for user [${USR}]"
             printf '\n'
@@ -143,8 +144,8 @@ get_user_info() {
 
     # ── Root password ────────────────────────────────────────
     while true; do
-        read -rsp "  ROOT password       : " ROOT_PASSWD; echo
-        read -rsp "  Confirm ROOT        : " CONF_ROOT_PASSWD; echo
+        read -rsp " - ROOT password       : " ROOT_PASSWD; echo
+        read -rsp " - Confirm ROOT        : " CONF_ROOT_PASSWD; echo
         if [[ "$ROOT_PASSWD" == "$CONF_ROOT_PASSWD" ]]; then
             success_msg "Password configured successfully for root"
             printf '\n'
@@ -312,7 +313,8 @@ partition_and_mount() {
 # ════════════════════════════════════════════════════════════════
 #   MAIN — Execution order
 # ════════════════════════════════════════════════════════════════
-run_preflight_checks
+check_internet
+check_uefi
 
 get_user_info
 
