@@ -128,7 +128,7 @@ get_user_info() {
             break
         fi
         error_msg "Invalid hostname! Must be 1-63 chars, lowercase letters, digits, - or ., and cannot start/end with symbols"
-        printf '\n'
+        printf '\n\n'
     done
     # ── Root password ────────────────────────────────────────
     warning_msg "Please set the ROOT (administrator) password"
@@ -137,11 +137,10 @@ get_user_info() {
         read -rsp " - Confirm ROOT password : " CONF_ROOT_PASSWD; echo
         if [[ "$ROOT_PASSWD" == "$CONF_ROOT_PASSWD" ]]; then
             success_msg "Password configured successfully for root"
-            printf '\n'
             break
         fi
         error_msg "Passwords do not match. Try again."
-        printf '\n'
+        printf '\n\n'
     done
 
     # ── Username ─────────────────────────────────────────────
@@ -152,7 +151,7 @@ get_user_info() {
             break
         fi
         error_msg "Invalid username! Must start with a lowercase letter and contain only a-z, 0-9, _ or - (max 32 chars)"
-        printf '\n'
+        printf '\n\n'
     done
 
     # ── User password ────────────────────────────────────────
@@ -162,11 +161,10 @@ get_user_info() {
         read -rsp " - Confirm user password : " CONF_USER_PASSWD; echo
         if [[ "$USER_PASSWD" == "$CONF_USER_PASSWD" ]]; then
             success_msg "Password configured successfully for user [${USR}]"
-            printf '\n'
             break
         fi
         error_msg "Passwords do not match. Try again."
-        printf '\n'
+        printf '\n\n'
     done
 
     clear
