@@ -66,8 +66,10 @@ error_msg() {
 # ════════════════════════════════════════════════════════════════
 #   0 — Pre-flight checks
 # ════════════════════════════════════════════════════════════════
-check_internet() {
+run_preflight_checks() {
     display_logo
+
+    # ── Check internet connection ────────────────────────
     info_msg "Check internet connection"
     
     while ! ping -c 1 archlinux.org &>/dev/null; do
@@ -94,13 +96,9 @@ check_internet() {
         esac
     done
     
-    success_msg "Internet connection verified successfully"
-    sleep 1
-    clear
-}
+    success_msg "Internet connection verified successfully."
 
-check_uefi() {
-    display_logo
+    # ── Check Boot mode ────────────────────────────────────────
     info_msg "Check Boot mode"
     if [ ! -d /sys/firmware/efi/efivars ]; then
         error_msg "This script requires UEFI mode."
@@ -109,8 +107,8 @@ check_uefi() {
         read -rp "Press ENTER to exit..."
         exit 1
     fi
-    success_msg "UEFI boot mode verified successfully"
-    sleep 1
+    success_msg "UEFI boot mode verified successfully."
+    sleep 2
     clear
 }
 
@@ -314,8 +312,7 @@ partition_and_mount() {
 # ════════════════════════════════════════════════════════════════
 #   MAIN — Execution order
 # ════════════════════════════════════════════════════════════════
-check_internet
-check_uefi
+run_preflight_checks
 
 get_user_info
 
