@@ -313,8 +313,7 @@ partition_and_mount() {
 # ════════════════════════════════════════════════════════════════
 #   MAIN — Execution order
 # ════════════════════════════════════════════════════════════════
-check_internet
-check_uefi
+run_preflight_checks
 
 get_user_info
 
