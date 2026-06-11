@@ -51,13 +51,13 @@ info_msg() {
     printf '\n\n%s%s[%s %s%s %s%s %s%s]%s\n\n' "${BOLD}" "${RED}" "${RST}" "${BOLD}" "${BLU}" "${1:?}" "${RST}" "${BOLD}" "${RED}" "${RST}"
 }
 processing_msg() {
-    printf '%s%s %s %s\n' "${BOLD}" "${WHT}" "${1:?}" "${RST}"
+    printf '%s%s → %s %s\n' "${BOLD}" "${WHT}" "${1:?}" "${RST}"
 }
 success_msg() {
     printf '%s%s ▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
 }
 warning_msg() {
-    printf '%s%s %s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
+    printf '%s%s  %s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
 }
 error_msg() {
     printf '%s%s ERROR: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
@@ -110,6 +110,7 @@ run_preflight_checks() {
     fi
     success_msg "UEFI boot mode verified successfully."
     sleep 2
+
     clear
 }
 
@@ -170,6 +171,7 @@ get_user_info() {
         error_msg "Passwords do not match. Try again."
         printf '\n'
     done
+    sleep 2
 
     clear
 }
@@ -183,20 +185,20 @@ select_disk() {
 
     printf '  Available disks:\n\n'
     lsblk -d -e 7,11 -o NAME,SIZE,TYPE,MODEL
-    printf '\n  ─────────────────────────────────────────────────────\n\n'
+    printf '\n─────────────────────────────────────────────────────\n\n'
 
-    PS3="  → Choose disk (number): "
+    warning_msg "Please choose the installation disk"
+    PS3="Selection (number) : "
     select DRIVE in $(lsblk -dnp -e 7,11 -o NAME); do
         if [[ -n "$DRIVE" && -b "$DRIVE" ]]; then
             success_msg "Selected installation disk: $DRIVE"
-            sleep 1
             break
         else
             error_msg "Invalid selection! Please choose a valid disk number from the list."
             printf '\n'
         fi
     done
-    
+    sleep 2
     clear
 }
 
@@ -207,13 +209,13 @@ partition_and_mount() {
     display_logo
     info_msg "Partitioning disk"
 
-    printf '  %sRecommended GPT layout for %s:%s\n\n' "$YLW" "$DRIVE" "$RST"
+    printf '  %s Recommended GPT layout for %s:%s\n\n' "$YLW" "$DRIVE" "$RST"
     printf '  ┌────────────────────────────────────────────────────────┐\n'
     printf '  │  Partition 1 :  512 MB       Type: EFI System          │\n'
     printf '  │  Partition 2 :  Remaining    Type: Linux filesystem    │\n'
     printf '  └────────────────────────────────────────────────────────┘\n\n'
     warning_msg 'cfdisk will open now. Create the layout above, then "Write" and "Quit"'
-    warning_msg 'Press ENTER to continue'
+    warning_msg 'Press ENTER to continue...'
     read -r
 
     cfdisk "${DRIVE}"
@@ -230,8 +232,8 @@ partition_and_mount() {
 
         if [[ -z "$efi_list" ]]; then
             error_msg "No EFI System partition found!"
-            printf '  Please re-partition and set Type to "EFI System".\n'
-            printf '  Press ENTER to open cfdisk again...\n'
+            warning_msg 'Please re-partition and set Type to "EFI System"'
+            warning_msg 'Press ENTER to open cfdisk again...'
             read -r
             cfdisk "${DRIVE}"
             partx -u "${DRIVE}" 2>/dev/null || true
@@ -242,14 +244,14 @@ partition_and_mount() {
         if [[ ${#efi_arr[@]} -eq 1 ]]; then
             EFI_PART="${efi_arr[0]}"
             success_msg "Automatically selected EFI partition: ${EFI_PART}"
-            sleep 1
+            sleep 2
             break
         else
             PS3="  → Choose EFI partition: "
             select EFI_PART in $efi_list; do
                 if [[ -n "$EFI_PART" ]]; then
                     success_msg "Selected EFI partition: ${EFI_PART}"
-                    sleep 1
+                    sleep 2
                     break 2
                 fi
             done
@@ -267,8 +269,8 @@ partition_and_mount() {
 
         if [[ -z "$root_list" ]]; then
             error_msg "No Linux filesystem partition found!"
-            printf '  Please re-partition and set Type to "Linux filesystem".\n'
-            printf '  Press ENTER to open cfdisk again...\n'
+            warning_msg 'Please re-partition and set Type to "Linux filesystem".\n'
+            warning_msg 'Press ENTER to open cfdisk again...\n'
             read -r
             cfdisk "${DRIVE}"
             partx -u "${DRIVE}" 2>/dev/null || true
@@ -279,14 +281,14 @@ partition_and_mount() {
         if [[ ${#root_arr[@]} -eq 1 ]]; then
             ROOT_PART="${root_arr[0]}"
             success_msg "Automatically selected Root partition: ${ROOT_PART}"
-            sleep 1
+            sleep 2
             break
         else
             PS3="  → Choose Root partition: "
             select ROOT_PART in $root_list; do
                 if [[ -n "$ROOT_PART" ]]; then
                     success_msg "Selected Root partition: ${ROOT_PART}"
-                    sleep 1
+                    sleep 2
                     break 2
                 fi
             done
@@ -311,7 +313,7 @@ partition_and_mount() {
     success_msg "${ROOT_PART} mounted at /mnt"
     success_msg "${EFI_PART} mounted at /mnt/efi"
     success_msg "All partitions formatted and mounted successfully"
-    sleep 3
+    sleep 2
     
     clear
 }
