@@ -57,7 +57,7 @@ success_msg() {
     printf '%s%s ▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
 }
 warning_msg() {
-    printf '%s%s  %s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
+    printf '%s%s%s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
 }
 error_msg() {
     printf '%s%s ERROR: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
@@ -188,7 +188,7 @@ select_disk() {
     printf '\n─────────────────────────────────────────────────────\n\n'
 
     warning_msg "Please choose the installation disk"
-    PS3="Selection (number) : "
+    PS3="\n→ Selection (number) : "
     select DRIVE in $(lsblk -dnp -e 7,11 -o NAME); do
         if [[ -n "$DRIVE" && -b "$DRIVE" ]]; then
             success_msg "Selected installation disk: $DRIVE"
