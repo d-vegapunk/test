@@ -119,7 +119,33 @@ run_preflight_checks() {
 get_user_info() {
     display_logo
     info_msg "User Accounts & System Configuration"
+
+    # ── Hostname ─────────────────────────────────────────────
+    warning_msg "Please enter the system hostname"
+    while true; do
+        read -rp " - Hostname : " HNAME
+        if [[ "$HNAME" =~ ^[a-z]$|^[a-z][a-z0-9_.-]{0,61}[a-z0-9]$ ]]; then
+            break
+        fi
+        error_msg "Invalid hostname! Must be 1-63 chars, lowercase letters, digits, - or ., and cannot start/end with symbols"
+        printf '\n'
+    done
+    # ── Root password ────────────────────────────────────────
+    warning_msg "Please set the ROOT (administrator) password"
+    while true; do
+        read -rsp " - ROOT password : " ROOT_PASSWD; echo
+        read -rsp " - Confirm ROOT password : " CONF_ROOT_PASSWD; echo
+        if [[ "$ROOT_PASSWD" == "$CONF_ROOT_PASSWD" ]]; then
+            success_msg "Password configured successfully for root"
+            printf '\n'
+            break
+        fi
+        error_msg "Passwords do not match. Try again."
+        printf '\n'
+    done
+
     # ── Username ─────────────────────────────────────────────
+    warning_msg "Please enter a username for your personal account"
     while true; do
         read -rp " - Username : " USR
         if [[ "${USR}" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
@@ -130,38 +156,16 @@ get_user_info() {
     done
 
     # ── User password ────────────────────────────────────────
+    warning_msg "Please set the password for user [${USR}]"
     while true; do
-        read -rsp " - Password for [${USR}] : " USER_PASSWD; echo
-        read -rsp " - Confirm password    : " CONF_USER_PASSWD; echo
+        read -rsp " - User password : " USER_PASSWD; echo
+        read -rsp " - Confirm user password : " CONF_USER_PASSWD; echo
         if [[ "$USER_PASSWD" == "$CONF_USER_PASSWD" ]]; then
             success_msg "Password configured successfully for user [${USR}]"
             printf '\n'
             break
         fi
         error_msg "Passwords do not match. Try again."
-        printf '\n'
-    done
-
-    # ── Root password ────────────────────────────────────────
-    while true; do
-        read -rsp " - ROOT password       : " ROOT_PASSWD; echo
-        read -rsp " - Confirm ROOT        : " CONF_ROOT_PASSWD; echo
-        if [[ "$ROOT_PASSWD" == "$CONF_ROOT_PASSWD" ]]; then
-            success_msg "Password configured successfully for root"
-            printf '\n'
-            break
-        fi
-        error_msg "Passwords do not match. Try again."
-        printf '\n'
-    done
-
-    # ── Hostname ─────────────────────────────────────────────
-    while true; do
-        read -rp "  Hostname  : " HNAME
-        if [[ "$HNAME" =~ ^[a-z]$|^[a-z][a-z0-9_.-]{0,61}[a-z0-9]$ ]]; then
-            break
-        fi
-        error_msg "Invalid hostname! Must be 1-63 chars, lowercase letters, digits, - or ., and cannot start/end with symbols"
         printf '\n'
     done
 
