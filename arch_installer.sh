@@ -60,7 +60,7 @@ warning_msg() {
     printf '%s%s%s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
 }
 error_msg() {
-    printf '%s%s ERROR: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
+    printf '%s%s[ERROR]: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -219,7 +219,10 @@ partition_and_mount() {
     read -r
 
     cfdisk "${DRIVE}"
-    partx -u "${DRIVE}" 2>/dev/null || true   # refresh kernel partition table
+    
+    # Force kernel to reread partition table and wait for udev to populate device nodes (prevents detection lag)
+    partprobe "${DRIVE}" 2>/dev/null || partx -u "${DRIVE}" 2>/dev/null || true
+    udevadm settle 2>/dev/null || true
 
     # ── Select EFI partition ─────────────────────────────────
     while true; do
@@ -236,7 +239,11 @@ partition_and_mount() {
             warning_msg 'Press ENTER to open cfdisk again...'
             read -r
             cfdisk "${DRIVE}"
-            partx -u "${DRIVE}" 2>/dev/null || true
+
+            # Force kernel to reread partition table and wait for udev to populate device nodes (prevents detection lag)
+            partprobe "${DRIVE}" 2>/dev/null || partx -u "${DRIVE}" 2>/dev/null || true
+            udevadm settle 2>/dev/null || true
+
             continue
         fi
     
@@ -273,7 +280,11 @@ partition_and_mount() {
             warning_msg 'Press ENTER to open cfdisk again...\n'
             read -r
             cfdisk "${DRIVE}"
-            partx -u "${DRIVE}" 2>/dev/null || true
+
+            # Force kernel to reread partition table and wait for udev to populate device nodes (prevents detection lag)
+            partprobe "${DRIVE}" 2>/dev/null || partx -u "${DRIVE}" 2>/dev/null || true
+            udevadm settle 2>/dev/null || true
+
             continue
         fi
     
@@ -305,7 +316,7 @@ partition_and_mount() {
     mkfs.ext4 -L ArchLinux "${ROOT_PART}" >/dev/null || { error_msg "Format Root failed!"; exit 1; }
 
     processing_msg "Mounting partitions"
-    mount "${ROOT_PART}" /mnt || { error_msg "Mount Root failed!"; exit 1; }
+    mount -t ext4 "${ROOT_PART}" /mnt || { error_msg "Mount Root failed!"; exit 1; }
     mkdir -p /mnt/efi
     mount "${EFI_PART}" /mnt/efi || { error_msg "Mount EFI failed!"; exit 1; }
 
