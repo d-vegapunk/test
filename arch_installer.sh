@@ -54,7 +54,7 @@ processing_msg() {
     printf '%s%s → %s %s\n' "${BOLD}" "${WHT}" "${1:?}" "${RST}"
 }
 success_msg() {
-    printf '%s%s ▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
+    printf '%s%s▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
 }
 warning_msg() {
     printf '%s%s%s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
@@ -97,10 +97,11 @@ run_preflight_checks() {
     done
     
     success_msg "Internet connection verified successfully."
-    sleep 2
+    sleep 1
 
     # ── Check Boot mode ────────────────────────────────────────
     info_msg "Check Boot mode"
+    sleep 1
     if [ ! -d /sys/firmware/efi/efivars ]; then
         error_msg "This script requires UEFI mode."
         error_msg "Boot the USB in UEFI mode (check BIOS settings)."
@@ -122,7 +123,7 @@ get_user_info() {
     info_msg "User Accounts & System Configuration"
 
     # ── Hostname ─────────────────────────────────────────────
-    warning_msg "Please enter the system hostname"
+    warning_msg "1. Please enter the system hostname"
     while true; do
         read -rp " - Hostname : " HNAME
         if [[ "$HNAME" =~ ^[a-z]$|^[a-z][a-z0-9_.-]{0,61}[a-z0-9]$ ]]; then
@@ -133,7 +134,7 @@ get_user_info() {
         printf '\n'
     done
     # ── Root password ────────────────────────────────────────
-    warning_msg "Please set the ROOT (administrator) password"
+    warning_msg "2. Please set the ROOT (administrator) password"
     while true; do
         read -rsp " - ROOT password : " ROOT_PASSWD; echo
         read -rsp " - Confirm ROOT password : " CONF_ROOT_PASSWD; echo
@@ -147,7 +148,7 @@ get_user_info() {
     done
 
     # ── Username ─────────────────────────────────────────────
-    warning_msg "Please enter a username for your personal account"
+    warning_msg "3. Please enter a username for your personal account"
     while true; do
         read -rp " - Username : " USR
         if [[ "${USR}" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
@@ -159,7 +160,7 @@ get_user_info() {
     done
 
     # ── User password ────────────────────────────────────────
-    warning_msg "Please set the password for user [${USR}]"
+    warning_msg "4. Please set the password for user [${USR}]"
     while true; do
         read -rsp " - User password : " USER_PASSWD; echo
         read -rsp " - Confirm user password : " CONF_USER_PASSWD; echo
@@ -282,19 +283,21 @@ partition_and_mount() {
     info_msg "Formatting & Mounting Partitions"
 
     processing_msg "Formatting EFI partition (${EFI_PART}) as FAT32"
-    mkfs.fat -F32 "${EFI_PART}" >/dev/null || { error_msg "Format EFI failed!"; exit 1; }
+    mkfs.fat -F32 "${EFI_PART}" >/dev/null 2>&1 || { error_msg "Format EFI failed!"; exit 1; }
 
     processing_msg "Formatting Root partition (${ROOT_PART}) as ext4 (label: ArchLinux)"
-    mkfs.ext4 -L ArchLinux "${ROOT_PART}" >/dev/null || { error_msg "Format Root failed!"; exit 1; }
+    mkfs.ext4 -L ArchLinux "${ROOT_PART}" >/dev/null 2>&1 || { error_msg "Format Root failed!"; exit 1; }
+    
+    printf '\n'
 
     processing_msg "Mounting partitions"
     mount -t ext4 "${ROOT_PART}" /mnt || { error_msg "Mount Root failed!"; exit 1; }
     mkdir -p /mnt/efi
     mount "${EFI_PART}" /mnt/efi || { error_msg "Mount EFI failed!"; exit 1; }
-
-    printf '\n'
     success_msg "${ROOT_PART} mounted at /mnt"
     success_msg "${EFI_PART} mounted at /mnt/efi"
+
+    printf '\n'
     success_msg "All partitions formatted and mounted successfully."
     warning_msg 'Press ENTER to continue...'
     read -r
@@ -316,22 +319,31 @@ install_base_system() {
          s/#ParallelDownloads = 5/ParallelDownloads = 5/;
          /^ParallelDownloads =/a ILoveCandy' \
         /etc/pacman.conf
+    sleep 2
 
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
-    reflector --verbose --latest 10 \
-              --country "Vietnam,Singapore,Japan" \
-              --sort rate \
-              --save /etc/pacman.d/mirrorlist >/dev/null 2>&1
+    if ! reflector --verbose --latest 10 \
+                  --country "Vietnam,Singapore,Japan" \
+                  --sort rate \
+                  --save /etc/pacman.d/mirrorlist >/dev/null 2>&1; then
+        warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
+    fi
+    sleep 1
 
     processing_msg "Running pacstrap to install base packages..."
-    pacstrap /mnt \
+    sleep 2
+    if ! pacstrap /mnt \
         base base-devel \
         "${KERNEL}" linux-firmware intel-ucode \
         mkinitcpio \
         networkmanager \
         reflector \
         zsh git vim \
-        zram-generator
+        zram-generator; then
+        error_msg "pacstrap failed! The base system could not be installed."
+        error_msg "This is usually caused by network/mirrorlist issues or insufficient disk space."
+        exit 1
+    fi
 
     success_msg "Base system packages installed successfully."
     sleep 2
@@ -345,6 +357,7 @@ install_base_system() {
 gen_fstab() {
     display_logo
     info_msg "Generate fstab"
+    sleep 1
     
     genfstab -U /mnt >> /mnt/etc/fstab
     success_msg "fstab generated and written to /mnt/etc/fstab successfully."
@@ -365,17 +378,21 @@ configure_localization() {
     processing_msg "Setting timezone to ${TIMEZONE}..."
     $CHROOT ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
     $CHROOT hwclock --systohc
+    sleep 1
 
     # Configure locales (enable specified locale and generate it)
     processing_msg "Configuring locales (${LOCALE})..."
     echo "${LOCALE} UTF-8" >> /mnt/etc/locale.gen
     $CHROOT locale-gen >/dev/null
     echo "LANG=${LOCALE}" > /mnt/etc/locale.conf
+    sleep 1
 
     # Configure keyboard layout and console font
     processing_msg "Setting console keyboard layout to ${KEYMAP}..."
     printf 'KEYMAP=%s\nFONT=Lat2-Terminus16\n' "$KEYMAP" > /mnt/etc/vconsole.conf
+    sleep 1
     
+    printf '\n'
     success_msg "Localization configured successfully."
     sleep 2
     
@@ -392,12 +409,15 @@ configure_network_identity() {
 
     # Set system hostname and configure /etc/hosts
     processing_msg "Setting hostname to ${HNAME} and configuring hosts..."
+    sleep 1
     echo "${HNAME}" > /mnt/etc/hostname
     cat >> /mnt/etc/hosts <<- EOL
 		127.0.0.1   localhost
 		::1         localhost
 		127.0.1.1   ${HNAME}.localdomain ${HNAME}
 	EOL
+
+    printf '\n'
     success_msg "Network identity configured successfully."
     sleep 2
 
@@ -414,11 +434,13 @@ create_users() {
     # Set root password
     processing_msg "Configuring password for root administrator..."
     echo "root:${ROOT_PASSWD}" | $CHROOT chpasswd
+    sleep 1
 
     # Create personal user account and add to essential groups
     processing_msg "Creating user account [${USR}] with wheel, audio, video, storage groups..."
     $CHROOT useradd -m -g users -G wheel,audio,video,storage -s /usr/bin/zsh "${USR}"
     echo "${USR}:${USER_PASSWD}" | $CHROOT chpasswd
+    sleep 1
 
     # Configure sudo privileges: temporarily allow wheel group group members to run sudo without password
     # (used during installation, will be reverted before final reboot)
@@ -427,10 +449,12 @@ create_users() {
         's/# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' \
         /mnt/etc/sudoers
     echo 'Defaults insults' >> /mnt/etc/sudoers
+    sleep 1
 
+    printf '\n'
     success_msg "User accounts and passwords configured successfully."
     sleep 2
-    
+
     clear
 }
 
@@ -443,14 +467,16 @@ install_grub() {
 
     # Install GRUB and other bootloader utilities
     processing_msg "Installing grub, efibootmgr, and os-prober packages..."
-    $CHROOT pacman -S grub efibootmgr os-prober --noconfirm >/dev/null
+    $CHROOT pacman -S grub efibootmgr os-prober --noconfirm --needed >/dev/null 2>&1
+    sleep 1
 
     # Install GRUB onto the EFI partition
     processing_msg "Installing GRUB bootloader to /efi (UEFI)..."
     $CHROOT grub-install \
         --target=x86_64-efi \
         --efi-directory=/efi \
-        --bootloader-id=ArchLinux
+        --bootloader-id=ArchLinux >/dev/null 2>&1
+    sleep 1
 
     # Configure GRUB settings (disable watchdog, optimizations, enable os-prober)
     processing_msg "Optimizing /etc/default/grub settings..."
@@ -458,24 +484,331 @@ install_grub() {
         's/quiet/nowatchdog mitigations=off zswap.enabled=0 transparent_hugepage=madvise/;
          s/#GRUB_DISABLE_OS_PROBER/GRUB_DISABLE_OS_PROBER/' \
         /mnt/etc/default/grub
+    sleep 1
 
     # Load GPU kernel modules early in initramfs for early Kernel Mode Setting (KMS)
     processing_msg "Adding i915 module to /etc/mkinitcpio.conf..."
     sed -i "s/MODULES=()/MODULES=(i915)/" /mnt/etc/mkinitcpio.conf
+    sleep 1
 
     # Regenerate initramfs images for the new kernel setup
     processing_msg "Regenerating initramfs images (mkinitcpio)..."
-    $CHROOT mkinitcpio -P
+    $CHROOT mkinitcpio -P >/dev/null 2>&1
+    sleep 1
 
     # Generate GRUB configuration file
     processing_msg "Generating grub.cfg..."
     echo
     $CHROOT grub-mkconfig -o /boot/grub/grub.cfg
+    sleep 1
 
+    printf '\n'
     success_msg "GRUB bootloader installed and configured successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   10 — Refresh package mirrors inside chroot
+# ════════════════════════════════════════════════════════════════
+refresh_mirrors() {
+    display_logo
+    info_msg "Refresh Package Mirrors"
+
+    # Configure pacman inside the new installation (enable color and parallel downloads)
+    processing_msg "Configuring pacman inside the target system..."
+    sed -i \
+        's/#Color/Color/;
+         s/#ParallelDownloads = 5/ParallelDownloads = 5/;
+         /^ParallelDownloads =/a ILoveCandy' \
+        /mnt/etc/pacman.conf
+    sleep 1
+
+    # Find the fastest mirrors for the target system in Vietnam, Singapore, and Japan
+    processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
+    $CHROOT reflector --verbose --latest 10 \
+        --country "Vietnam,Singapore,Japan" \
+        --sort rate \
+        --save /etc/pacman.d/mirrorlist >/dev/null 2>&1
+    sleep 1
+
+    # Sync package databases using the newly optimized mirrors
+    processing_msg "Syncing package databases (pacman -Syy)..."
+    echo
+    $CHROOT pacman -Syy --noconfirm
+    sleep 1
+
+    printf '\n'
+    success_msg "Package mirrors refreshed and synced successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   11 — Configure zram swap
+# ════════════════════════════════════════════════════════════════
+configure_zram() {
+    display_logo
+    info_msg "Configure zram swap"
+
+    # Create the zram-generator configuration file
+    # Set size to half of physical RAM, compression to lz4, and priority to 100
+    processing_msg "Creating zram-generator.conf file..."
+    cat > /mnt/etc/systemd/zram-generator.conf <<- 'EOL'
+		[zram0]
+		zram-size = ram / 2
+		compression-algorithm = lz4
+		swap-priority = 100
+		fs-type = swap
+	EOL
+    sleep 1
+
+    success_msg "zram swap configured successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   12 — Apply performance and SSD optimizations
+# ════════════════════════════════════════════════════════════════
+optimize_system_performance() {
+    display_logo
+    info_msg "Apply Performance Optimizations"
+
+    # Optimize ext4 partition settings for SSD durability and speed
+    processing_msg "Configuring ext4 mount options and fast_commit in fstab..."
+    sed -i '0,/relatime/s/relatime/noatime,commit=120/' /mnt/etc/fstab
+    $CHROOT tune2fs -O fast_commit "${ROOT_PART}" >/dev/null
+    sleep 1
+
+    # Configure makepkg compiler flags (optimize for native CPU and use all threads)
+    processing_msg "Optimizing makepkg compiler flags for compilation..."
+    local nproc_val
+    nproc_val=$(nproc)
+    sed -i \
+        "s/march=x86-64/march=native/;
+         s/mtune=generic/mtune=native/;
+         s/-O2/-O3/;
+         s/#MAKEFLAGS=\"-j2/MAKEFLAGS=\"-j${nproc_val}\"/" \
+        /mnt/etc/makepkg.conf
+    sleep 1
+
+    # Set CPU governor to performance mode
+    processing_msg "Configuring CPU governor to performance mode..."
+    $CHROOT pacman -S cpupower --noconfirm --needed >/dev/null 2>&1
+    
+    local cpupower_cfg=""
+    if [ -f "/mnt/etc/default/cpupower-service.conf" ]; then
+        cpupower_cfg="/mnt/etc/default/cpupower-service.conf"
+    elif [ -f "/mnt/etc/default/cpupower" ]; then
+        cpupower_cfg="/mnt/etc/default/cpupower"
+    fi
+    if [ -n "$cpupower_cfg" ]; then
+        if grep -qi "governor=" "$cpupower_cfg"; then
+            sed -i -E "s/#?(governor|GOVERNOR)='?[a-zA-Z0-9_-]+'?/\1='performance'/i" "$cpupower_cfg"
+        else
+            echo "GOVERNOR='performance'" >> "$cpupower_cfg"
+        fi
+    else
+        warning_msg "cpupower configuration file not found inside chroot."
+    fi
+    sleep 1
+
+    # Set I/O scheduler to mq-deadline for SSDs
+    processing_msg "Configuring udev rules for SSD I/O scheduler..."
+    cat >> /mnt/etc/udev/rules.d/60-ssd.rules <<- 'EOL'
+		ACTION=="add|change", KERNEL=="sd[a-z]*|nvme[0-9]*n[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+	EOL
+    sleep 1
+
+    # Tune virtual memory (swappiness, cache pressure, and dirty ratios)
+    processing_msg "Tuning kernel sysctl virtual memory parameters..."
+    cat >> /mnt/etc/sysctl.d/99-performance.conf <<- 'EOL'
+		vm.swappiness=5
+		vm.vfs_cache_pressure=50
+		vm.dirty_ratio=10
+		vm.dirty_background_ratio=5
+		vm.page-cluster=0
+	EOL
+    sleep 1
+
+    # Configure Cloudflare DNS in NetworkManager
+    processing_msg "Configuring Cloudflare DNS as default fallback..."
+    mkdir -p /mnt/etc/NetworkManager/conf.d
+    cat >> /mnt/etc/NetworkManager/conf.d/dns-servers.conf <<- 'EOL'
+		[global-dns-domain-*]
+		servers=1.1.1.1,1.0.0.1
+	EOL
+    sleep 1
+
+    # Set systemd-journal to volatile memory and limit size to 64MB to reduce SSD writes
+    processing_msg "Configuring systemd journald to use volatile storage..."
+    sed -i \
+        's/#Storage=auto/Storage=volatile/;
+         s/#RuntimeMaxUse=/RuntimeMaxUse=64M/' \
+        /mnt/etc/systemd/journald.conf
+    sleep 1
+
+    # Blacklist unnecessary kernel modules to speed up boot times
+    ## 1. Disable Intel TCO hardware watchdog timer (unnecessary for personal PCs)
+    ## 2. Disable legacy PS/2 mouse emulation driver (modern systems use evdev/libinput)
+    ## 3. Disable emulation of Apple Mac single-button mouse button mapping
+    processing_msg "Blacklisting unnecessary kernel modules..."
+    cat >> /mnt/etc/modprobe.d/blacklist.conf <<- 'EOL'
+		blacklist iTCO_wdt
+		blacklist mousedev
+		blacklist mac_hid
+	EOL
+    sleep 1
+
+    # Mask unused systemd services to reduce memory usage and speed up boot
+    processing_msg "Masking unused systemd services..."
+    $CHROOT systemctl mask lvm2-monitor.service systemd-random-seed.service >/dev/null 2>&1
+    sleep 1
+
+    printf '\n'
+    success_msg "Performance optimizations applied successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   13 — Install GPU drivers and Xorg graphics server (Intel)
+# ════════════════════════════════════════════════════════════════
+install_graphics_drivers() {
+    display_logo
+    info_msg "Install GPU Drivers & Xorg"
+
+    # Install Xorg server, essential utilities, and Mesa/Vulkan drivers for Intel UHD Graphics
+    processing_msg "Installing Xorg server, utilities, and Intel graphics drivers..."
+    sleep 1
+    $CHROOT pacman -S \
+        xorg-server \
+        xorg-xinput xorg-xrdb xorg-xsetroot xorg-xkill xorg-xdpyinfo xorg-xwininfo \
+        xf86-video-intel \
+        mesa \
+        vulkan-intel \
+        intel-media-driver \
+        libva-intel-driver \
+        libvdpau-va-gl \
+        --noconfirm --needed >/dev/null 2>&1
+
+    printf '\n'
+    success_msg "Xorg and Intel graphics drivers installed successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   14 — Install audio stack (PipeWire)
+# ════════════════════════════════════════════════════════════════
+install_audio_stack() {
+    display_logo
+    info_msg "Install Audio Stack"
+
+    # Install PipeWire, session manager (wireplumber), GUI mixer (pavucontrol), and ALSA utilities
+    processing_msg "Installing PipeWire, WirePlumber, and pavucontrol..."
+    $CHROOT pacman -S \
+        pipewire pipewire-pulse pipewire-alsa pipewire-jack \
+        wireplumber \
+        pavucontrol \
+        alsa-utils \
+        --noconfirm --needed >/dev/null 2>&1
+    sleep 1
+
+    printf '\n'
+    success_msg "PipeWire audio stack installed successfully."
+    sleep 2
+
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   15 — Install multimedia codecs and archive utilities
+# ════════════════════════════════════════════════════════════════
+install_codecs_and_utilities() {
+    display_logo
+    info_msg "Install Codecs & Utilities"
+
+    # Install video/audio codecs, image libraries, archive utils, and system utilities
+    processing_msg "Installing multimedia codecs and archiving tools..."
+    $CHROOT pacman -S \
+        ffmpeg ffmpegthumbnailer \
+        aom libde265 x265 x264 libmpeg2 xvidcore libtheora libvpx sdl \
+        jasper openjpeg2 libwebp webp-pixbuf-loader imagemagick \
+        unarchiver lrzip lzip p7zip lbzip2 lzop cpio unrar unzip zip \
+        xdg-utils xdg-user-dirs \
+        --noconfirm --needed >/dev/null 2>&1
+    sleep 1
+
+    printf '\n'
+    success_msg "Codecs and archive utilities installed successfully."
     sleep 2
     
     clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   16 — Install storage system drivers and mount utilities
+# ════════════════════════════════════════════════════════════════
+install_storage_and_mount_utils() {
+    display_logo
+    info_msg "Install Storage & Mount Utils"
+
+    # Install filesystem tools (fat/ntfs), gvfs mounting daemons, MTP tools, hardware utilities, and GTK theme assets
+    processing_msg "Installing filesystem drivers, gvfs, and mount utilities..."
+    $CHROOT pacman -S \
+        dosfstools ntfs-3g \
+        gvfs gvfs-mtp gvfs-nfs \
+        libmtp usbutils net-tools \
+        gnome-themes-extra \
+        --noconfirm --needed >/dev/null 2>&1
+    sleep 1
+
+    printf '\n'
+    success_msg "Storage and mount utilities installed successfully."
+    sleep 2
+    clear
+}
+
+# ════════════════════════════════════════════════════════════════
+#   17 — Finish Phase 1 Installation
+# ════════════════════════════════════════════════════════════════
+finish_installation() {
+    display_logo
+    info_msg "Phase 1 Complete!"
+
+    # Copy the post-install script to the new system home directory so it's ready upon reboot
+    processing_msg "Copying post-install script to /home/${USR}/..."
+    mkdir -p /mnt/home/${USR}
+    cp "$(dirname "$0")/install_dotfiles.sh" "/mnt/home/${USR}/"
+    chown -R ${USR}:users "/mnt/home/${USR}/install_dotfiles.sh"
+    chmod +x "/mnt/home/${USR}/install_dotfiles.sh"
+    sleep 1
+
+    printf '\n'
+    success_msg "Phase 1 completed successfully."
+    sleep 2
+
+    warning_msg "Base installation and core configuration are finished."
+    printf "  To complete your setup:\n"
+    printf "  1) Reboot your computer and log in with your new user account [${USR}].\n"
+    printf "  2) Run the second script to set up your desktop environment & dotfiles:\n"
+    printf "     → bash ~/install_dotfiles.sh\n\n"
+    
+    while true; do
+        read -rp "  Reboot system now? [y/N]: " yn
+        case "$yn" in
+            [Yy]*) umount -a >/dev/null 2>&1; reboot ;;
+            [Nn]*) printf '\n  Exiting. Please unmount and reboot when ready.\n\n'; exit 0 ;;
+            *) printf '  Please type y or n\n' ;;
+        esac
+    done
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -494,3 +827,13 @@ configure_localization
 configure_network_identity
 create_users
 install_grub
+
+refresh_mirrors
+configure_zram
+optimize_system_performance
+
+install_graphics_drivers
+install_audio_stack
+install_codecs_and_utilities
+install_storage_and_mount_utils
+finish_installation
