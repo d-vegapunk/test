@@ -17,7 +17,17 @@ readonly TIMEZONE="Asia/Ho_Chi_Minh"
 readonly LOCALE="en_US.UTF-8"
 readonly KEYMAP="us"
 readonly KERNEL="linux"
+
+# ════════════════════════════════════════════════════════════════
+#   CHROOT ENVIRONMENT
+# ════════════════════════════════════════════════════════════════
 readonly CHROOT="arch-chroot /mnt"
+
+# ════════════════════════════════════════════════════════════════
+#   SYSTEM LOGGING
+# ════════════════════════════════════════════════════════════════
+readonly LOG_FILE="/tmp/arch_install.log"
+: > "$LOG_FILE"
 
 # ════════════════════════════════════════════════════════════════
 #   COLORS & HELPERS
@@ -283,10 +293,10 @@ partition_and_mount() {
     info_msg "Formatting & Mounting Partitions"
 
     processing_msg "Formatting EFI partition (${EFI_PART}) as FAT32"
-    mkfs.fat -F32 "${EFI_PART}" >/dev/null 2>&1 || { error_msg "Format EFI failed!"; exit 1; }
+    mkfs.fat -F32 "${EFI_PART}" >> "$LOG_FILE" 2>&1 || { error_msg "Format EFI failed! Check details in $LOG_FILE"; exit 1; }
 
     processing_msg "Formatting Root partition (${ROOT_PART}) as ext4 (label: ArchLinux)"
-    mkfs.ext4 -L ArchLinux "${ROOT_PART}" >/dev/null 2>&1 || { error_msg "Format Root failed!"; exit 1; }
+    mkfs.ext4 -F -L ArchLinux "${ROOT_PART}" >> "$LOG_FILE" 2>&1 || { error_msg "Format Root failed! Check details in $LOG_FILE"; exit 1; }
     
     printf '\n'
 
@@ -325,7 +335,7 @@ install_base_system() {
     if ! reflector --verbose --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
                   --sort rate \
-                  --save /etc/pacman.d/mirrorlist >/dev/null 2>&1; then
+                  --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1; then
         warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
     fi
     sleep 1
@@ -383,7 +393,7 @@ configure_localization() {
     # Configure locales (enable specified locale and generate it)
     processing_msg "Configuring locales (${LOCALE})..."
     echo "${LOCALE} UTF-8" >> /mnt/etc/locale.gen
-    $CHROOT locale-gen >/dev/null
+    $CHROOT locale-gen >> "$LOG_FILE" 2>&1
     echo "LANG=${LOCALE}" > /mnt/etc/locale.conf
     sleep 1
 
@@ -467,7 +477,7 @@ install_grub() {
 
     # Install GRUB and other bootloader utilities
     processing_msg "Installing grub, efibootmgr, and os-prober packages..."
-    $CHROOT pacman -S grub efibootmgr os-prober --noconfirm --needed >/dev/null 2>&1
+    $CHROOT pacman -S grub efibootmgr os-prober --noconfirm --needed >> "$LOG_FILE" 2>&1
     sleep 1
 
     # Install GRUB onto the EFI partition
@@ -475,7 +485,7 @@ install_grub() {
     $CHROOT grub-install \
         --target=x86_64-efi \
         --efi-directory=/efi \
-        --bootloader-id=ArchLinux >/dev/null 2>&1
+        --bootloader-id=ArchLinux >> "$LOG_FILE" 2>&1
     sleep 1
 
     # Configure GRUB settings (disable watchdog, optimizations, enable os-prober)
@@ -493,7 +503,7 @@ install_grub() {
 
     # Regenerate initramfs images for the new kernel setup
     processing_msg "Regenerating initramfs images (mkinitcpio)..."
-    $CHROOT mkinitcpio -P >/dev/null 2>&1
+    $CHROOT mkinitcpio -P >> "$LOG_FILE" 2>&1
     sleep 1
 
     # Generate GRUB configuration file
@@ -530,7 +540,7 @@ refresh_mirrors() {
     $CHROOT reflector --verbose --latest 10 \
         --country "Vietnam,Singapore,Japan" \
         --sort rate \
-        --save /etc/pacman.d/mirrorlist >/dev/null 2>&1
+        --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1
     sleep 1
 
     # Sync package databases using the newly optimized mirrors
@@ -581,7 +591,7 @@ optimize_system_performance() {
     # Optimize ext4 partition settings for SSD durability and speed
     processing_msg "Configuring ext4 mount options and fast_commit in fstab..."
     sed -i '0,/relatime/s/relatime/noatime,commit=120/' /mnt/etc/fstab
-    $CHROOT tune2fs -O fast_commit "${ROOT_PART}" >/dev/null
+    $CHROOT tune2fs -O fast_commit "${ROOT_PART}" >> "$LOG_FILE" 2>&1
     sleep 1
 
     # Configure makepkg compiler flags (optimize for native CPU and use all threads)
@@ -598,7 +608,7 @@ optimize_system_performance() {
 
     # Set CPU governor to performance mode
     processing_msg "Configuring CPU governor to performance mode..."
-    $CHROOT pacman -S cpupower --noconfirm --needed >/dev/null 2>&1
+    $CHROOT pacman -S cpupower --noconfirm --needed >> "$LOG_FILE" 2>&1
     
     local cpupower_cfg=""
     if [ -f "/mnt/etc/default/cpupower-service.conf" ]; then
@@ -666,7 +676,7 @@ optimize_system_performance() {
 
     # Mask unused systemd services to reduce memory usage and speed up boot
     processing_msg "Masking unused systemd services..."
-    $CHROOT systemctl mask lvm2-monitor.service systemd-random-seed.service >/dev/null 2>&1
+    $CHROOT systemctl mask lvm2-monitor.service systemd-random-seed.service >> "$LOG_FILE" 2>&1
     sleep 1
 
     printf '\n'
@@ -695,7 +705,7 @@ install_graphics_drivers() {
         intel-media-driver \
         libva-intel-driver \
         libvdpau-va-gl \
-        --noconfirm --needed >/dev/null 2>&1
+        --noconfirm --needed >> "$LOG_FILE" 2>&1
 
     printf '\n'
     success_msg "Xorg and Intel graphics drivers installed successfully."
@@ -718,7 +728,7 @@ install_audio_stack() {
         wireplumber \
         pavucontrol \
         alsa-utils \
-        --noconfirm --needed >/dev/null 2>&1
+        --noconfirm --needed >> "$LOG_FILE" 2>&1
     sleep 1
 
     printf '\n'
@@ -743,7 +753,7 @@ install_codecs_and_utilities() {
         jasper openjpeg2 libwebp webp-pixbuf-loader imagemagick \
         unarchiver lrzip lzip p7zip lbzip2 lzop cpio unrar unzip zip \
         xdg-utils xdg-user-dirs \
-        --noconfirm --needed >/dev/null 2>&1
+        --noconfirm --needed >> "$LOG_FILE" 2>&1
     sleep 1
 
     printf '\n'
@@ -767,7 +777,7 @@ install_storage_and_mount_utils() {
         gvfs gvfs-mtp gvfs-nfs \
         libmtp usbutils net-tools \
         gnome-themes-extra \
-        --noconfirm --needed >/dev/null 2>&1
+        --noconfirm --needed >> "$LOG_FILE" 2>&1
     sleep 1
 
     printf '\n'
