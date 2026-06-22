@@ -29,6 +29,27 @@ readonly CHROOT="arch-chroot /mnt"
 readonly LOG_FILE="/tmp/arch_install.log"
 : > "$LOG_FILE"
 
+log_to_file() {
+    local level="${1:?}"
+    local msg="${2:?}"
+    printf '[%s] [%-12s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg" >> "$LOG_FILE"
+}
+
+log_command() {
+    local desc="${1:?}"
+    shift
+    log_to_file "START" "$desc"
+    log_to_file "COMMAND" "Executing: $*"
+    if "$@" >> "$LOG_FILE" 2>&1; then
+        log_to_file "SUCCESS" "Finished: $desc"
+        return 0
+    else
+        local exit_code=$?
+        log_to_file "ERROR" "Failed: $desc (Exit code: $exit_code)"
+        return $exit_code
+    fi
+}
+
 # ════════════════════════════════════════════════════════════════
 #   COLORS & HELPERS
 # ════════════════════════════════════════════════════════════════
@@ -59,18 +80,23 @@ display_logo () {
 
 info_msg() {
     printf '\n\n%s%s[%s %s%s %s%s %s%s]%s\n\n' "${BOLD}" "${RED}" "${RST}" "${BOLD}" "${BLU}" "${1:?}" "${RST}" "${BOLD}" "${RED}" "${RST}"
+    log_to_file "SECTION" "=== $1 ==="
 }
 processing_msg() {
     printf '%s%s → %s %s\n' "${BOLD}" "${WHT}" "${1:?}" "${RST}"
+    log_to_file "STEP" "$1"
 }
 success_msg() {
     printf '%s%s▶ %s %s\n' "${BOLD}" "${GRN}" "${1:?}" "${RST}"
+    log_to_file "SUCCESS" "$1"
 }
 warning_msg() {
     printf '%s%s%s %s\n' "${BOLD}" "${YLW}" "${1:?}" "${RST}"
+    log_to_file "WARNING" "$1"
 }
 error_msg() {
     printf '%s%s[ERROR]: %s %s\n' "${BOLD}" "${RED}" "${1:?}" "${RST}" >&2
+    log_to_file "ERROR" "$1"
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -116,7 +142,7 @@ run_preflight_checks() {
         error_msg "This script requires UEFI mode."
         error_msg "Boot the USB in UEFI mode (check BIOS settings)."
         printf '\n'
-        read -rp "Press ENTER to exit..."
+        read -rp "Press ${CYN}ENTER${RST} to exit..."
         exit 1
     fi
     success_msg "UEFI boot mode verified successfully."
@@ -160,7 +186,7 @@ get_user_info() {
     # ── Username ─────────────────────────────────────────────
     warning_msg "3. Please enter a username for your personal account"
     while true; do
-        read -rp "  ${BLU}→ Username :${RST} " USR
+        read -rp "  ${YLW}→ Username :${RST} " USR
         if [[ "${USR}" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
             printf '\n'
             break
@@ -170,12 +196,12 @@ get_user_info() {
     done
 
     # ── User password ────────────────────────────────────────
-    warning_msg "4. Please set the password for user [${USR}]"
+    warning_msg "4. Please set the password for user [${CYN}${USR}${YLW}]"
     while true; do
-        read -rsp "  ${YLW}→ User password :${RST} " USER_PASSWD; echo
-        read -rsp "  ${YLW}→ Confirm user password :${RST} " CONF_USER_PASSWD; echo
+        read -rsp "  ${MGT}→ User password :${RST} " USER_PASSWD; echo
+        read -rsp "  ${MGT}→ Confirm user password :${RST} " CONF_USER_PASSWD; echo
         if [[ "$USER_PASSWD" == "$CONF_USER_PASSWD" ]]; then
-            success_msg "Password configured successfully for user [${USR}]."
+            success_msg "Password configured successfully for user [${CYN}${USR}${GRN}]."
             printf '\n'
             break
         fi
@@ -234,7 +260,7 @@ select_partition() {
         if [[ -z "$part_list" ]]; then
             error_msg "No ${type_desc} partition found!"
             warning_msg "Please re-partition and set Type to \"${type_desc}\""
-            warning_msg "Press ENTER to open cfdisk again..."
+            warning_msg "Press ${WHT}ENTER${YLW} to open cfdisk again..."
             read -r
             cfdisk "${drive}"
             
@@ -271,10 +297,10 @@ partition_and_mount() {
     printf '  %s Recommended GPT layout for %s:%s\n\n' "$YLW" "$DRIVE" "$RST"
     printf "  ${CYN}┌────────────────────────────────────────────────────────┐${RST}\n"
     printf "  ${CYN}│${RST}  Partition 1 :  512 MB       Type: ${MGT}EFI System${RST}          ${CYN}│${RST}\n"
-    printf "  ${CYN}│${RST}  Partition 2 :  Remaining    Type: ${BLU}Linux filesystem${RST}    ${CYN}│${RST}\n"
+    printf "  ${CYN}│${RST}  Partition 2 :  Remaining    Type: ${YLW}Linux filesystem${RST}    ${CYN}│${RST}\n"
     printf "  ${CYN}└────────────────────────────────────────────────────────┘${RST}\n\n"
-    warning_msg 'cfdisk will open now. Create the layout above, then "Write" and "Quit"'
-    warning_msg 'Press ENTER to continue...'
+    warning_msg "cfdisk will open now. Create the layout above, then \"${WHT}Write${YLW}\" and \"${WHT}Quit${YLW}\""
+    warning_msg "Press ${WHT}ENTER${YLW} to continue..."
     read -r
 
     cfdisk "${DRIVE}"
@@ -293,10 +319,10 @@ partition_and_mount() {
     info_msg "Formatting & Mounting Partitions"
 
     processing_msg "Formatting EFI partition (${EFI_PART}) as FAT32"
-    mkfs.fat -F32 "${EFI_PART}" >> "$LOG_FILE" 2>&1 || { error_msg "Format EFI failed! Check details in $LOG_FILE"; exit 1; }
+    log_command "Formatting EFI partition" mkfs.fat -F32 "${EFI_PART}" || { error_msg "Format EFI failed! Check details in $LOG_FILE"; exit 1; }
 
     processing_msg "Formatting Root partition (${ROOT_PART}) as ext4 (label: ArchLinux)"
-    mkfs.ext4 -F -L ArchLinux "${ROOT_PART}" >> "$LOG_FILE" 2>&1 || { error_msg "Format Root failed! Check details in $LOG_FILE"; exit 1; }
+    log_command "Formatting Root partition" mkfs.ext4 -F -L ArchLinux "${ROOT_PART}" || { error_msg "Format Root failed! Check details in $LOG_FILE"; exit 1; }
     
     printf '\n'
 
@@ -309,7 +335,7 @@ partition_and_mount() {
 
     printf '\n'
     success_msg "All partitions formatted and mounted successfully."
-    warning_msg 'Press ENTER to continue...'
+    warning_msg "Press ${WHT}ENTER${YLW} to continue..."
     read -r
     
     clear
@@ -332,10 +358,10 @@ install_base_system() {
     sleep 2
 
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
-    if ! reflector --verbose --latest 10 \
+    if ! log_command "Reflector mirror update" reflector --verbose --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
                   --sort rate \
-                  --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1; then
+                  --save /etc/pacman.d/mirrorlist; then
         warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
     fi
     sleep 1
@@ -393,7 +419,7 @@ configure_localization() {
     # Configure locales (enable specified locale and generate it)
     processing_msg "Configuring locales (${LOCALE})..."
     echo "${LOCALE} UTF-8" >> /mnt/etc/locale.gen
-    $CHROOT locale-gen >> "$LOG_FILE" 2>&1
+    log_command "Generating locales" $CHROOT locale-gen || { error_msg "Locale generation failed! Check details in $LOG_FILE"; exit 1; }
     echo "LANG=${LOCALE}" > /mnt/etc/locale.conf
     sleep 1
 
@@ -447,7 +473,7 @@ create_users() {
     sleep 1
 
     # Create personal user account and add to essential groups
-    processing_msg "Creating user account [${USR}] with wheel, audio, video, storage groups..."
+    processing_msg "Creating user account [${CYN}${USR}${WHT}] with wheel, audio, video, storage groups..."
     $CHROOT useradd -m -g users -G wheel,audio,video,storage -s /usr/bin/zsh "${USR}"
     echo "${USR}:${USER_PASSWD}" | $CHROOT chpasswd
     sleep 1
@@ -477,15 +503,15 @@ install_grub() {
 
     # Install GRUB and other bootloader utilities
     processing_msg "Installing grub, efibootmgr, and os-prober packages..."
-    $CHROOT pacman -S grub efibootmgr os-prober --noconfirm --needed >> "$LOG_FILE" 2>&1
+    log_command "Installing bootloader packages" $CHROOT pacman -S grub efibootmgr os-prober --noconfirm --needed || { error_msg "Bootloader package installation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     # Install GRUB onto the EFI partition
     processing_msg "Installing GRUB bootloader to /efi (UEFI)..."
-    $CHROOT grub-install \
+    log_command "Installing GRUB bootloader" $CHROOT grub-install \
         --target=x86_64-efi \
         --efi-directory=/efi \
-        --bootloader-id=ArchLinux >> "$LOG_FILE" 2>&1
+        --bootloader-id=ArchLinux || { error_msg "GRUB installation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     # Configure GRUB settings (disable watchdog, optimizations, enable os-prober)
@@ -503,13 +529,13 @@ install_grub() {
 
     # Regenerate initramfs images for the new kernel setup
     processing_msg "Regenerating initramfs images (mkinitcpio)..."
-    $CHROOT mkinitcpio -P >> "$LOG_FILE" 2>&1
+    log_command "Regenerating initramfs" $CHROOT mkinitcpio -P || { error_msg "Initramfs regeneration failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     # Generate GRUB configuration file
     processing_msg "Generating grub.cfg..."
     echo
-    $CHROOT grub-mkconfig -o /boot/grub/grub.cfg
+    log_command "Generating grub.cfg" $CHROOT grub-mkconfig -o /boot/grub/grub.cfg || { error_msg "GRUB config generation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     printf '\n'
@@ -537,10 +563,10 @@ refresh_mirrors() {
 
     # Find the fastest mirrors for the target system in Vietnam, Singapore, and Japan
     processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
-    $CHROOT reflector --verbose --latest 10 \
+    log_command "Regenerating mirror list inside chroot" $CHROOT reflector --verbose --latest 10 \
         --country "Vietnam,Singapore,Japan" \
         --sort rate \
-        --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1
+        --save /etc/pacman.d/mirrorlist
     sleep 1
 
     # Sync package databases using the newly optimized mirrors
@@ -591,7 +617,7 @@ optimize_system_performance() {
     # Optimize ext4 partition settings for SSD durability and speed
     processing_msg "Configuring ext4 mount options and fast_commit in fstab..."
     sed -i '0,/relatime/s/relatime/noatime,commit=120/' /mnt/etc/fstab
-    $CHROOT tune2fs -O fast_commit "${ROOT_PART}" >> "$LOG_FILE" 2>&1
+    log_command "Enabling fast_commit on root partition" $CHROOT tune2fs -O fast_commit "${ROOT_PART}"
     sleep 1
 
     # Configure makepkg compiler flags (optimize for native CPU and use all threads)
@@ -608,7 +634,7 @@ optimize_system_performance() {
 
     # Set CPU governor to performance mode
     processing_msg "Configuring CPU governor to performance mode..."
-    $CHROOT pacman -S cpupower --noconfirm --needed >> "$LOG_FILE" 2>&1
+    log_command "Installing cpupower" $CHROOT pacman -S cpupower --noconfirm --needed || warning_msg "Failed to install cpupower."
     
     local cpupower_cfg=""
     if [ -f "/mnt/etc/default/cpupower-service.conf" ]; then
@@ -676,7 +702,7 @@ optimize_system_performance() {
 
     # Mask unused systemd services to reduce memory usage and speed up boot
     processing_msg "Masking unused systemd services..."
-    $CHROOT systemctl mask lvm2-monitor.service systemd-random-seed.service >> "$LOG_FILE" 2>&1
+    log_command "Masking unused services" $CHROOT systemctl mask lvm2-monitor.service systemd-random-seed.service
     sleep 1
 
     printf '\n'
@@ -696,7 +722,7 @@ install_graphics_drivers() {
     # Install Xorg server, essential utilities, and Mesa/Vulkan drivers for Intel UHD Graphics
     processing_msg "Installing Xorg server, utilities, and Intel graphics drivers..."
     sleep 1
-    $CHROOT pacman -S \
+    log_command "Installing Xorg and Intel graphics drivers" $CHROOT pacman -S \
         xorg-server \
         xorg-xinput xorg-xrdb xorg-xsetroot xorg-xkill xorg-xdpyinfo xorg-xwininfo \
         xf86-video-intel \
@@ -705,7 +731,7 @@ install_graphics_drivers() {
         intel-media-driver \
         libva-intel-driver \
         libvdpau-va-gl \
-        --noconfirm --needed >> "$LOG_FILE" 2>&1
+        --noconfirm --needed || { error_msg "Xorg/Intel graphics installation failed! Check details in $LOG_FILE"; exit 1; }
 
     printf '\n'
     success_msg "Xorg and Intel graphics drivers installed successfully."
@@ -723,12 +749,12 @@ install_audio_stack() {
 
     # Install PipeWire, session manager (wireplumber), GUI mixer (pavucontrol), and ALSA utilities
     processing_msg "Installing PipeWire, WirePlumber, and pavucontrol..."
-    $CHROOT pacman -S \
+    log_command "Installing PipeWire audio stack" $CHROOT pacman -S \
         pipewire pipewire-pulse pipewire-alsa pipewire-jack \
         wireplumber \
         pavucontrol \
         alsa-utils \
-        --noconfirm --needed >> "$LOG_FILE" 2>&1
+        --noconfirm --needed || { error_msg "PipeWire audio stack installation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     printf '\n'
@@ -747,13 +773,13 @@ install_codecs_and_utilities() {
 
     # Install video/audio codecs, image libraries, archive utils, and system utilities
     processing_msg "Installing multimedia codecs and archiving tools..."
-    $CHROOT pacman -S \
+    log_command "Installing multimedia codecs and archive tools" $CHROOT pacman -S \
         ffmpeg ffmpegthumbnailer \
         aom libde265 x265 x264 libmpeg2 xvidcore libtheora libvpx sdl \
         jasper openjpeg2 libwebp webp-pixbuf-loader imagemagick \
         unarchiver lrzip lzip p7zip lbzip2 lzop cpio unrar unzip zip \
         xdg-utils xdg-user-dirs \
-        --noconfirm --needed >> "$LOG_FILE" 2>&1
+        --noconfirm --needed || { error_msg "Multimedia codecs / archiving tools installation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     printf '\n'
@@ -772,12 +798,12 @@ install_storage_and_mount_utils() {
 
     # Install filesystem tools (fat/ntfs), gvfs mounting daemons, MTP tools, hardware utilities, and GTK theme assets
     processing_msg "Installing filesystem drivers, gvfs, and mount utilities..."
-    $CHROOT pacman -S \
+    log_command "Installing filesystem drivers and mount utilities" $CHROOT pacman -S \
         dosfstools ntfs-3g \
         gvfs gvfs-mtp gvfs-nfs \
         libmtp usbutils net-tools \
         gnome-themes-extra \
-        --noconfirm --needed >> "$LOG_FILE" 2>&1
+        --noconfirm --needed || { error_msg "Storage/mount utilities installation failed! Check details in $LOG_FILE"; exit 1; }
     sleep 1
 
     printf '\n'
@@ -787,57 +813,44 @@ install_storage_and_mount_utils() {
 }
 
 # ════════════════════════════════════════════════════════════════
-#   17 — Finish Installation
-# ════════════════════════════════════════════════════════════════
-finish_installation() {
-    display_logo
-    info_msg "Installation Complete!"
-
-    success_msg "Completed tasks:"
-    printf "  ${GRN}✔${RST} ${CYN}Pre-flight system checks${RST}\n"
-    printf "  ${GRN}✔${RST} ${MGT}Configured system hostname and user accounts${RST}\n"
-    printf "  ${GRN}✔${RST} ${BLU}Formatted and mounted partitions${RST}\n"
-    printf "  ${GRN}✔${RST} ${WHT}Installed base system & core packages${RST}\n"
-    printf "  ${GRN}✔${RST} ${YLW}Configured localization & network settings${RST}\n"
-    printf "  ${GRN}✔${RST} ${CYN}Installed and configured GRUB bootloader${RST}\n"
-    printf "  ${GRN}✔${RST} ${MGT}Enabled zram swap & applied performance tweaks${RST}\n"
-    printf "  ${GRN}✔${RST} ${BLU}Installed Intel GPU drivers & Xorg server${RST}\n"
-    printf "  ${GRN}✔${RST} ${WHT}Installed PipeWire audio stack${RST}\n"
-    printf "  ${GRN}✔${RST} ${YLW}Installed multimedia codecs & archiving tools${RST}\n\n"
-
-    while true; do
-        read -rp "  ${BOLD}${YLW}Reboot system now? [y/N]:${RST} " yn
-        case "$yn" in
-            [Yy]*) umount -a >/dev/null 2>&1; reboot ;;
-            [Nn]*) printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"; exit 0 ;;
-            *) printf "  ${RED}Please type y or n${RST}\n" ;;
-        esac
-    done
-}
-
-# ════════════════════════════════════════════════════════════════
 #   MAIN — Execution order
 # ════════════════════════════════════════════════════════════════
-run_preflight_checks
 
+# ── 1. Pre-flight checks & User configuration ──────────────
+run_preflight_checks
 get_user_info
 
+# ── 2. Disk setup (Partitioning, formatting & mounting) ─────
 select_disk
 partition_and_mount
 
+# ── 3. Base system installation ──────────────────────────────
 install_base_system
 gen_fstab
+
+# ── 4. Target system configuration (Chroot) ──────────────────
 configure_localization
 configure_network_identity
 create_users
 install_grub
 
+# ── 5. System optimization & performance tuning ──────────────
 refresh_mirrors
 configure_zram
 optimize_system_performance
 
+# ── 6. Hardware drivers & system utility packages ────────────
 install_graphics_drivers
 install_audio_stack
 install_codecs_and_utilities
 install_storage_and_mount_utils
-finish_installation
+
+# ── 7. Reboot ───────────────────────────────
+while true; do
+    read -rp "  ${BOLD}${YLW}Reboot system now? [y/N]:${RST} " yn
+    case "$yn" in
+        [Yy]*) umount -a >/dev/null 2>&1; reboot ;;
+        [Nn]*) printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"; exit 0 ;;
+        *) printf "  ${RED}Please type y or n${RST}\n" ;;
+    esac
+done
