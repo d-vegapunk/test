@@ -135,7 +135,7 @@ get_user_info() {
     # ── Hostname ─────────────────────────────────────────────
     warning_msg "1. Please enter the system hostname"
     while true; do
-        read -rp " - Hostname : " HNAME
+        read -rp "  ${CYN}→ Hostname :${RST} " HNAME
         if [[ "$HNAME" =~ ^[a-z]$|^[a-z][a-z0-9_.-]{0,61}[a-z0-9]$ ]]; then
             printf '\n'
             break
@@ -146,8 +146,8 @@ get_user_info() {
     # ── Root password ────────────────────────────────────────
     warning_msg "2. Please set the ROOT (administrator) password"
     while true; do
-        read -rsp " - ROOT password : " ROOT_PASSWD; echo
-        read -rsp " - Confirm ROOT password : " CONF_ROOT_PASSWD; echo
+        read -rsp "  ${MGT}→ ROOT password :${RST} " ROOT_PASSWD; echo
+        read -rsp "  ${MGT}→ Confirm ROOT password :${RST} " CONF_ROOT_PASSWD; echo
         if [[ "$ROOT_PASSWD" == "$CONF_ROOT_PASSWD" ]]; then
             success_msg "Password configured successfully for root."
             printf '\n'
@@ -160,7 +160,7 @@ get_user_info() {
     # ── Username ─────────────────────────────────────────────
     warning_msg "3. Please enter a username for your personal account"
     while true; do
-        read -rp " - Username : " USR
+        read -rp "  ${BLU}→ Username :${RST} " USR
         if [[ "${USR}" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
             printf '\n'
             break
@@ -172,8 +172,8 @@ get_user_info() {
     # ── User password ────────────────────────────────────────
     warning_msg "4. Please set the password for user [${USR}]"
     while true; do
-        read -rsp " - User password : " USER_PASSWD; echo
-        read -rsp " - Confirm user password : " CONF_USER_PASSWD; echo
+        read -rsp "  ${YLW}→ User password :${RST} " USER_PASSWD; echo
+        read -rsp "  ${YLW}→ Confirm user password :${RST} " CONF_USER_PASSWD; echo
         if [[ "$USER_PASSWD" == "$CONF_USER_PASSWD" ]]; then
             success_msg "Password configured successfully for user [${USR}]."
             printf '\n'
@@ -269,10 +269,10 @@ partition_and_mount() {
     info_msg "Partitioning disk"
 
     printf '  %s Recommended GPT layout for %s:%s\n\n' "$YLW" "$DRIVE" "$RST"
-    printf '  ┌────────────────────────────────────────────────────────┐\n'
-    printf '  │  Partition 1 :  512 MB       Type: EFI System          │\n'
-    printf '  │  Partition 2 :  Remaining    Type: Linux filesystem    │\n'
-    printf '  └────────────────────────────────────────────────────────┘\n\n'
+    printf "  ${CYN}┌────────────────────────────────────────────────────────┐${RST}\n"
+    printf "  ${CYN}│${RST}  Partition 1 :  512 MB       Type: ${MGT}EFI System${RST}          ${CYN}│${RST}\n"
+    printf "  ${CYN}│${RST}  Partition 2 :  Remaining    Type: ${BLU}Linux filesystem${RST}    ${CYN}│${RST}\n"
+    printf "  ${CYN}└────────────────────────────────────────────────────────┘${RST}\n\n"
     warning_msg 'cfdisk will open now. Create the layout above, then "Write" and "Quit"'
     warning_msg 'Press ENTER to continue...'
     read -r
@@ -787,36 +787,30 @@ install_storage_and_mount_utils() {
 }
 
 # ════════════════════════════════════════════════════════════════
-#   17 — Finish Phase 1 Installation
+#   17 — Finish Installation
 # ════════════════════════════════════════════════════════════════
 finish_installation() {
     display_logo
-    info_msg "Phase 1 Complete!"
+    info_msg "Installation Complete!"
 
-    # Copy the post-install script to the new system home directory so it's ready upon reboot
-    processing_msg "Copying post-install script to /home/${USR}/..."
-    mkdir -p /mnt/home/${USR}
-    cp "$(dirname "$0")/install_dotfiles.sh" "/mnt/home/${USR}/"
-    chown -R ${USR}:users "/mnt/home/${USR}/install_dotfiles.sh"
-    chmod +x "/mnt/home/${USR}/install_dotfiles.sh"
-    sleep 1
+    success_msg "Completed tasks:"
+    printf "  ${GRN}✔${RST} ${CYN}Pre-flight system checks${RST}\n"
+    printf "  ${GRN}✔${RST} ${MGT}Configured system hostname and user accounts${RST}\n"
+    printf "  ${GRN}✔${RST} ${BLU}Formatted and mounted partitions${RST}\n"
+    printf "  ${GRN}✔${RST} ${WHT}Installed base system & core packages${RST}\n"
+    printf "  ${GRN}✔${RST} ${YLW}Configured localization & network settings${RST}\n"
+    printf "  ${GRN}✔${RST} ${CYN}Installed and configured GRUB bootloader${RST}\n"
+    printf "  ${GRN}✔${RST} ${MGT}Enabled zram swap & applied performance tweaks${RST}\n"
+    printf "  ${GRN}✔${RST} ${BLU}Installed Intel GPU drivers & Xorg server${RST}\n"
+    printf "  ${GRN}✔${RST} ${WHT}Installed PipeWire audio stack${RST}\n"
+    printf "  ${GRN}✔${RST} ${YLW}Installed multimedia codecs & archiving tools${RST}\n\n"
 
-    printf '\n'
-    success_msg "Phase 1 completed successfully."
-    sleep 2
-
-    warning_msg "Base installation and core configuration are finished."
-    printf "  To complete your setup:\n"
-    printf "  1) Reboot your computer and log in with your new user account [${USR}].\n"
-    printf "  2) Run the second script to set up your desktop environment & dotfiles:\n"
-    printf "     → bash ~/install_dotfiles.sh\n\n"
-    
     while true; do
-        read -rp "  Reboot system now? [y/N]: " yn
+        read -rp "  ${BOLD}${YLW}Reboot system now? [y/N]:${RST} " yn
         case "$yn" in
             [Yy]*) umount -a >/dev/null 2>&1; reboot ;;
-            [Nn]*) printf '\n  Exiting. Please unmount and reboot when ready.\n\n'; exit 0 ;;
-            *) printf '  Please type y or n\n' ;;
+            [Nn]*) printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"; exit 0 ;;
+            *) printf "  ${RED}Please type y or n${RST}\n" ;;
         esac
     done
 }
