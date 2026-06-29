@@ -361,6 +361,7 @@ install_base_system() {
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
     if ! log_command "Reflector mirror update" reflector --verbose --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
+                  --protocol https \
                   --sort rate \
                   --save /etc/pacman.d/mirrorlist; then
         warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
@@ -566,6 +567,7 @@ refresh_mirrors() {
     processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
     log_command "Regenerating mirror list inside chroot" $CHROOT reflector --verbose --latest 10 \
         --country "Vietnam,Singapore,Japan" \
+        --protocol https \
         --sort rate \
         --save /etc/pacman.d/mirrorlist
     sleep 1
@@ -873,14 +875,17 @@ while true; do
             fi
             break
             ;;
+
         [Nn]*|"")
             break
             ;;
+
         *)
             printf "  ${RED}Please type y or n${RST}\n"
             ;;
     esac
 done
+
 printf '\n'
 
 # Ask if user wants to reboot
@@ -891,10 +896,12 @@ while true; do
             umount -a >/dev/null 2>&1
             reboot
             ;;
+
         [Nn]*|"")
             printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"
             exit 0
             ;;
+            
         *)
             printf "  ${RED}Please type y or n${RST}\n"
             ;;
