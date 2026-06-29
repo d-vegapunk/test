@@ -31,7 +31,9 @@ readonly LOG_FILE="/tmp/arch_install.log"
 log_to_file() {
     local level="${1:?}"
     local msg="${2:?}"
-    printf '[%s] [%-12s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$msg" >> "$LOG_FILE"
+    local clean_msg
+    clean_msg=$(printf '%s' "$msg" | sed -E 's/\x1b(\[[0-9;]*[a-zA-Z]|\([a-zA-Z])//g')
+    printf '[%s] [%-12s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$clean_msg" >> "$LOG_FILE"
 }
 
 log_command() {
@@ -847,54 +849,54 @@ install_storage_and_mount_utils
 # ── 7. Installation completion ───────────────────────────────
 display_logo
 info_msg "Installation completed"
-    # Ask if user wants to view log
-    while true; do
-        read -rp "  ${BOLD}${YLW}Would you like to view the installation log? [y/N]:${RST} " yl
-        case "$yl" in
-            [Yy]*)
-                if [ -f "$LOG_FILE" ]; then
-                    clear
-                    warning_msg "=== Log Viewer Instructions ==="
-                    printf "  • Use arrow keys (Up/Down) or PageUp/PageDown to scroll.\n"
-                    printf "  • Press '/' then type a term to search (e.g., /ERROR).\n"
-                    printf "  • Press 'n' to jump to the next search result.\n"
-                    printf "  • Press 'q' to exit the log viewer.\n\n"
-                    warning_msg "Press ENTER to open the log file..."
-                    read -r
-                    less "$LOG_FILE"
-                    clear
-                    display_logo
-                    info_msg "Installation completed"
-                else
-                    error_msg "Log file not found!"
-                fi
-                break
-                ;;
-            [Nn]*|"")
-                break
-                ;;
-            *)
-                printf "  ${RED}Please type y or n${RST}\n"
-                ;;
-        esac
-    done
 
-    printf '\n'
+# Ask if user wants to view log
+while true; do
+    read -rp "  ${BOLD}${YLW}Would you like to view the installation log? [y/N]:${RST} " yl
+    case "$yl" in
+        [Yy]*)
+            if [ -f "$LOG_FILE" ]; then
+                clear
+                warning_msg "=== Log Viewer Instructions ==="
+                printf " • Use arrow keys (Up/Down) or PageUp/PageDown to scroll.\n"
+                printf " • Press '/' then type a term to search (e.g., /ERROR).\n"
+                printf " • Press 'n' to jump to the next search result.\n"
+                printf " • Press 'q' to exit the log viewer.\n\n"
+                warning_msg "Press ENTER to open the log file..."
+                read -r
+                less "$LOG_FILE"
+                clear
+                display_logo
+                info_msg "Installation completed"
+            else
+                error_msg "Log file not found!"
+            fi
+            break
+            ;;
+        [Nn]*|"")
+            break
+            ;;
+        *)
+            printf "  ${RED}Please type y or n${RST}\n"
+            ;;
+    esac
+done
+printf '\n'
 
-    # Ask if user wants to reboot
-    while true; do
-        read -rp "  ${BOLD}${YLW}Reboot system now? [y/N]:${RST} " yr
-        case "$yr" in
-            [Yy]*)
-                umount -a >/dev/null 2>&1
-                reboot
-                ;;
-            [Nn]*|"")
-                printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"
-                exit 0
-                ;;
-            *)
-                printf "  ${RED}Please type y or n${RST}\n"
-                ;;
-        esac
-    done
+# Ask if user wants to reboot
+while true; do
+    read -rp "  ${BOLD}${YLW}Reboot system now? [y/N]:${RST} " yr
+    case "$yr" in
+        [Yy]*)
+            umount -a >/dev/null 2>&1
+            reboot
+            ;;
+        [Nn]*|"")
+            printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"
+            exit 0
+            ;;
+        *)
+            printf "  ${RED}Please type y or n${RST}\n"
+            ;;
+    esac
+done
