@@ -359,9 +359,8 @@ install_base_system() {
     sleep 2
 
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
-    if ! log_command "Reflector mirror update" reflector --latest 10 \
+    if ! log_command "Reflector mirror update" reflector --verbose --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
-                  --protocol https \
                   --sort rate \
                   --save /etc/pacman.d/mirrorlist; then
         warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
@@ -565,9 +564,8 @@ refresh_mirrors() {
 
     # Find the fastest mirrors for the target system in Vietnam, Singapore, and Japan
     processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
-    log_command "Regenerating mirror list inside chroot" $CHROOT reflector --latest 10 \
+    log_command "Regenerating mirror list inside chroot" $CHROOT reflector --verbose --latest 10 \
         --country "Vietnam,Singapore,Japan" \
-        --protocol https \
         --sort rate \
         --save /etc/pacman.d/mirrorlist
     sleep 1
@@ -681,6 +679,11 @@ optimize_system_performance() {
 		[global-dns-domain-*]
 		servers=1.1.1.1,1.0.0.1
 	EOL
+    sleep 1
+
+    # Enable NetworkManager service to manage network interfaces on boot
+    processing_msg "Enabling NetworkManager service..."
+    log_command "Enabling NetworkManager" $CHROOT systemctl enable NetworkManager.service
     sleep 1
 
     # Set systemd-journal to volatile memory and limit size to 64MB to reduce SSD writes
@@ -875,11 +878,9 @@ while true; do
             fi
             break
             ;;
-
         [Nn]*|"")
             break
             ;;
-
         *)
             printf "  ${RED}Please type y or n${RST}\n"
             ;;
@@ -896,12 +897,10 @@ while true; do
             umount -a >/dev/null 2>&1
             reboot
             ;;
-
         [Nn]*|"")
             printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"
             exit 0
             ;;
-
         *)
             printf "  ${RED}Please type y or n${RST}\n"
             ;;
