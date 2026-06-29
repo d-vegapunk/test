@@ -359,7 +359,7 @@ install_base_system() {
     sleep 2
 
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
-    if ! log_command "Reflector mirror update" reflector --verbose --latest 10 \
+    if ! log_command "Reflector mirror update" reflector --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
                   --protocol https \
                   --sort rate \
@@ -565,7 +565,7 @@ refresh_mirrors() {
 
     # Find the fastest mirrors for the target system in Vietnam, Singapore, and Japan
     processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
-    log_command "Regenerating mirror list inside chroot" $CHROOT reflector --verbose --latest 10 \
+    log_command "Regenerating mirror list inside chroot" $CHROOT reflector --latest 10 \
         --country "Vietnam,Singapore,Japan" \
         --protocol https \
         --sort rate \
@@ -901,7 +901,7 @@ while true; do
             printf "\n  ${BOLD}${GRN}Please unmount and reboot when ready.${RST}\n\n"
             exit 0
             ;;
-            
+
         *)
             printf "  ${RED}Please type y or n${RST}\n"
             ;;
