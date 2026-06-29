@@ -361,6 +361,7 @@ install_base_system() {
     processing_msg "Updating pacman mirrors via reflector (VN/SG/JP)..."
     if ! log_command "Reflector mirror update" reflector --verbose --latest 10 \
                   --country "Vietnam,Singapore,Japan" \
+                  --protocol https \
                   --sort rate \
                   --save /etc/pacman.d/mirrorlist; then
         warning_msg "Reflector failed to update mirrors. Using default Live USB mirrorlist."
@@ -442,7 +443,7 @@ configure_localization() {
 
 configure_network_identity() {
     display_logo
-    info_msg "Configure network identity"
+    info_msg "Configure network identity and services"
 
     # Set system hostname and configure /etc/hosts
     processing_msg "Setting hostname to ${HNAME} and configuring hosts..."
@@ -453,9 +454,24 @@ configure_network_identity() {
 		::1         localhost
 		127.0.1.1   ${HNAME}.localdomain ${HNAME}
 	EOL
+    sleep 1
+
+    # Configure Cloudflare DNS in NetworkManager
+    processing_msg "Configuring Cloudflare DNS as default fallback..."
+    mkdir -p /mnt/etc/NetworkManager/conf.d
+    cat >> /mnt/etc/NetworkManager/conf.d/dns-servers.conf <<- 'EOL'
+		[global-dns-domain-*]
+		servers=1.1.1.1,1.0.0.1
+	EOL
+    sleep 1
+
+    # Enable NetworkManager service to manage network interfaces on boot
+    processing_msg "Enabling NetworkManager service..."
+    log_command "Enabling NetworkManager" $CHROOT systemctl enable NetworkManager.service
+    sleep 1
 
     printf '\n'
-    success_msg "Network identity configured successfully."
+    success_msg "Network settings configured successfully."
     sleep 2
 
     clear
@@ -566,6 +582,7 @@ refresh_mirrors() {
     processing_msg "Selecting fastest package mirrors inside chroot (reflector)..."
     log_command "Regenerating mirror list inside chroot" $CHROOT reflector --verbose --latest 10 \
         --country "Vietnam,Singapore,Japan" \
+        --protocol https \
         --sort rate \
         --save /etc/pacman.d/mirrorlist
     sleep 1
@@ -670,20 +687,6 @@ optimize_system_performance() {
 		vm.dirty_background_ratio=5
 		vm.page-cluster=0
 	EOL
-    sleep 1
-
-    # Configure Cloudflare DNS in NetworkManager
-    processing_msg "Configuring Cloudflare DNS as default fallback..."
-    mkdir -p /mnt/etc/NetworkManager/conf.d
-    cat >> /mnt/etc/NetworkManager/conf.d/dns-servers.conf <<- 'EOL'
-		[global-dns-domain-*]
-		servers=1.1.1.1,1.0.0.1
-	EOL
-    sleep 1
-
-    # Enable NetworkManager service to manage network interfaces on boot
-    processing_msg "Enabling NetworkManager service..."
-    log_command "Enabling NetworkManager" $CHROOT systemctl enable NetworkManager.service
     sleep 1
 
     # Set systemd-journal to volatile memory and limit size to 64MB to reduce SSD writes
